@@ -10,16 +10,17 @@
   // Adds Today / This week / Overdue buttons to the board header.
   // Each opens the board in a new tab with Trello's built-in filter applied.
   var base = window.location.href.replace(/[^/]*$/, '');
-  var icon = { dark: base + 'icon-light.svg', light: base + 'icon-dark.svg' };
+  // Trello's 'dark' icon is shown on dark headers, so it uses the light-coloured file.
+  function icon(name) { return { dark: base + name + '-light.svg', light: base + name + '-dark.svg' }; }
 
   function views(shortLink) {
     var url = 'https://www.trello.com/b/' + shortLink + '?filter=';
     return [
-      { text: 'Today',     filter: 'due:day',      target: 'tb-today' },
-      { text: 'This week', filter: 'due:week',     target: 'tb-week' },
-      { text: 'Overdue',   filter: 'overdue:true', target: 'tb-overdue' }
+      { text: 'Today',     filter: 'due:day',      target: 'tb-today',   icon: 'today' },
+      { text: 'This week', filter: 'due:week',     target: 'tb-week',    icon: 'week' },
+      { text: 'Overdue',   filter: 'overdue:true', target: 'tb-overdue', icon: 'overdue' }
     ].map(function (v) {
-      return { icon: icon, text: v.text, url: url + v.filter, target: v.target };
+      return { icon: icon(v.icon), text: v.text, url: url + v.filter, target: v.target };
     });
   }
 
