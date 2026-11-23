@@ -53,6 +53,17 @@
   .auth button { background: #0c66e4; color: #fff; border: 0; border-radius: 4px; padding: 7px 14px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
   .auth button:hover { background: #0055cc; }
   .err { color: #c9372c; font-size: 12px; margin: 0 0 8px; }
+  .card { align-items: flex-start; }
+  .card > .tick, .card > .pts, .card > .due, .card > .av { margin-top: 2px; }
+  .desc { color: #44546f; font-size: 12px; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+  .cm { color: #626f86; font-size: 12px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cm b { color: #44546f; font-weight: 600; }
+  .open .desc { display: block; -webkit-line-clamp: unset; }
+  .cmlist { margin-top: 6px; border-left: 2px solid #dcdfe4; padding-left: 8px; }
+  .cmlist div { font-size: 12px; color: #44546f; margin-bottom: 5px; white-space: pre-line; }
+  .cmlist span { color: #8590a2; }
+  .more { font-size: 12px; color: #0c66e4; background: none; border: 0; padding: 0; margin-top: 3px; cursor: pointer; font-weight: 600; }
+  .more:hover { text-decoration: underline; }
   .empty { color: #626f86; padding: 24px 0; text-align: center; }
 </style>
 </head>
@@ -88,7 +99,7 @@
   var AGILE_TOOLS = '59d4ef8cfea15a55b0086614';
   var t = window.TrelloPowerUp.iframe(APP);
   var api = t.getRestApi();
-  var token = null, hits = [], board = null, listsAll = [], meId = null, LISTNAME = {};
+  var token = null, comments = {}, expanded = {}, hits = [], board = null, listsAll = [], meId = null, LISTNAME = {};
   var view = t.arg('view') || 'today';
   var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#626f86' };
   var DESC = {
@@ -123,6 +134,22 @@
     document.getElementById('sub').textContent = txt + '. Click a card to open it.';
   }
 
+  function plain(md) {
+    return (md || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]{1,3}/g, '').replace(/^#+\s*/gm, '').trim();
+  }
+  function ago(iso) {
+    var d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+  function details(c) {
+    var desc = plain(c.desc), cms = comments[c.id] || [], open = !!expanded[c.id], h = '';
+    if (desc) h += '<div class="desc">' + esc(desc) + '</div>';
+    if (cms.length && !open) h += '<div class="cm">💬 ' + cms.length + ' · <b>' + esc(cms[0].who) + ':</b> ' + esc(cms[0].text.replace(/\s+/g, ' ')) + '</div>';
+    if (cms.length && open) h += '<div class="cmlist">' + cms.map(function (m) { return '<div><b>' + esc(m.who) + '</b> <span>' + ago(m.date) + '</span><br>' + esc(m.text) + '</div>'; }).join('') + '</div>';
+    var long = desc.length > 120 || desc.split('\n').length > 2 || cms.length > 0;
+    if (long) h += '<button type="button" class="more">' + (open ? 'Show less' : (cms.length ? 'Show more & all comments' : 'Show more')) + '</button>';
+    return h;
+  }
+
   function render(listName, now) {
     var out = document.getElementById('out');
     if (!hits.length) { out.innerHTML = '<div class="empty">Nothing here. Nice.</div>'; updateSub(); return; }
@@ -141,7 +168,7 @@
         }).join('');
         html += '<div class="card" data-id="' + c.id + '">' +
                 (token ? '<button class="tick" title="Mark complete" aria-label="Mark complete"></button>' : '') +
-                '<div class="name">' + (labs ? '<div class="labels">' + labs + '</div>' : '') + esc(c.name) + '</div>' +
+                '<div class="name' + (expanded[c.id] ? ' open' : '') + '">' + (labs ? '<div class="labels">' + labs + '</div>' : '') + esc(c.name) + details(c) + '</div>' +
                 (c.points != null ? '<span class="pts">' + hours(c.points) + '</span>' : '') +
                 '<span class="due ' + cls + '">' + (d < now ? 'Overdue · ' : '') + fmt(d) + '</span>' + avs + '</div>';
       });
@@ -196,9 +223,22 @@
       });
   }
 
+  function loadComments(boardId) {
+    return fetch('https://api.trello.com/1/boards/' + boardId + '/actions?filter=commentCard&limit=1000&memberCreator_fields=fullName&key=' + APP.appKey + '&token=' + token)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (acts) {
+        var map = {};
+        acts.forEach(function (a) {
+          var id = a.data && a.data.card && a.data.card.id; if (!id) return;
+          (map[id] = map[id] || []).push({ who: ((a.memberCreator || {}).fullName || 'Someone').split(' ')[0], text: a.data.text || '', date: a.date });
+        });
+        return map; // newest first, as Trello returns them
+      });
+  }
+
   function load() {
     Promise.all([
-      t.cards('id', 'name', 'due', 'dueComplete', 'idList', 'labels', 'members'),
+      t.cards('id', 'name', 'desc', 'due', 'dueComplete', 'idList', 'labels', 'members'),
       t.lists('id', 'name'),
       t.board('id', 'labels', 'members'),
       t.member('id'),
@@ -213,6 +253,7 @@
       document.getElementById('newBtn').style.display = token ? '' : 'none';
       if (!token) { showAuthBanner(); render(listName, now); return; }
       render(listName, now);
+      loadComments(boardId).then(function (m) { comments = m; render(listName, now); }).catch(function () {});
       loadPoints(boardId).then(function (pts) {
         hits.forEach(function (c) { if (pts[c.id] != null) c.points = pts[c.id]; });
         render(listName, now);
@@ -226,6 +267,11 @@
   document.getElementById('out').addEventListener('click', function (e) {
     var row = e.target.closest('.card'); if (!row) return;
     if (e.target.closest('.tick')) { e.stopPropagation(); complete(row); return; }
+    if (e.target.closest('.more')) {
+      e.stopPropagation(); var id = row.getAttribute('data-id');
+      if (expanded[id]) delete expanded[id]; else expanded[id] = 1;
+      render(LISTNAME, new Date()); return;
+    }
     t.showCard(row.getAttribute('data-id'));
   });
 
