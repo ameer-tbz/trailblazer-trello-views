@@ -12,7 +12,30 @@
   .card:hover { background: #f1f2f4; }
   .name { flex: 1; min-width: 0; }
   .labels { display: flex; gap: 4px; margin-bottom: 3px; flex-wrap: wrap; }
-  .lab { height: 6px; width: 32px; border-radius: 3px; }
+  .lab { font-size: 11px; font-weight: 600; line-height: 16px; padding: 0 6px; border-radius: 3px; color: #172b4d; }
+  .top { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .top .sub { flex: 1; margin: 0; }
+  .btn { background: #0c66e4; color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: #0055cc; }
+  .btn.ghost { background: #f1f2f4; color: #172b4d; }
+  .btn.ghost:hover { background: #dcdfe4; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  form.new { border: 1px solid #dcdfe4; border-radius: 8px; padding: 12px; margin: 0 0 14px; background: #f7f8f9; display: none; }
+  form.new.open { display: block; }
+  form.new label.f { display: block; font-size: 11px; font-weight: 700; color: #626f86; text-transform: uppercase; letter-spacing: .03em; margin: 10px 0 4px; }
+  form.new label.f:first-child { margin-top: 0; }
+  form.new input[type=text], form.new textarea, form.new input[type=date], form.new input[type=time], form.new select {
+    width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid #8590a2; border-radius: 4px; background: #fff; color: #172b4d; }
+  form.new textarea { min-height: 52px; resize: vertical; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 > * { flex: 1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; opacity: .55; color: #172b4d; }
+  .chip.on { opacity: 1; border-color: #172b4d; }
+  .person { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; padding: 3px 10px 3px 3px; border-radius: 14px; border: 2px solid #dcdfe4; background: #fff; cursor: pointer; opacity: .6; }
+  .person.on { opacity: 1; border-color: #0c66e4; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+  .hint { color: #626f86; font-size: 12px; }
   .meta { color: #626f86; font-size: 12px; }
   .due { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; background: #f5cd47; color: #172b4d; }
   .due.over { background: #c9372c; color: #fff; }
@@ -35,7 +58,27 @@
 </head>
 <body>
 <div id="auth"></div>
-<p class="sub" id="sub"></p>
+<div class="top"><p class="sub" id="sub"></p><button class="btn" id="newBtn" type="button" style="display:none">+ New task</button></div>
+<form class="new" id="newForm" autocomplete="off">
+  <label class="f" for="nName">Task</label>
+  <input type="text" id="nName" placeholder="What needs doing?" required>
+  <label class="f" for="nDesc">Details</label>
+  <textarea id="nDesc" placeholder="Optional: notes, links, KR it supports"></textarea>
+  <div class="row2">
+    <div><label class="f" for="nDate">Due date</label><input type="date" id="nDate" required></div>
+    <div><label class="f" for="nTime">Time</label><input type="time" id="nTime" required></div>
+    <div><label class="f" for="nList">List</label><select id="nList"></select></div>
+  </div>
+  <label class="f">Labels</label>
+  <div class="chips" id="nLabels"></div>
+  <label class="f">Owner</label>
+  <div class="chips" id="nMembers"></div>
+  <div class="actions">
+    <button class="btn" type="submit" id="nSave">Create task</button>
+    <button class="btn ghost" type="button" id="nCancel">Cancel</button>
+    <span class="hint">Set hours on the card after (Power-ups → Story Points).</span>
+  </div>
+</form>
 <div id="out"></div>
 <script>
   // The API key is a public identifier (Trello designs it to live in Power-Up code).
@@ -45,9 +88,9 @@
   var AGILE_TOOLS = '59d4ef8cfea15a55b0086614';
   var t = window.TrelloPowerUp.iframe(APP);
   var api = t.getRestApi();
-  var token = null, hits = [];
+  var token = null, hits = [], board = null, listsAll = [], meId = null, LISTNAME = {};
   var view = t.arg('view') || 'today';
-  var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#8590a2' };
+  var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#626f86' };
   var DESC = {
     today: 'Due today or overdue, not done.',
     nextday: 'Due in the next 24 hours, not done.',
@@ -90,7 +133,7 @@
       html += '<h3>' + esc(n) + ' (' + groups[n].length + ')</h3>';
       groups[n].forEach(function (c) {
         var d = new Date(c.due), cls = d < now ? 'over' : (d - now > 864e5 ? 'later' : '');
-        var labs = (c.labels || []).map(function (l) { return '<span class="lab" title="' + esc(l.name || '') + '" style="background:' + (COLORS[l.color] || '#dfe1e6') + '"></span>'; }).join('');
+        var labs = (c.labels || []).map(function (l) { return '<span class="lab" style="background:' + (COLORS[l.color] || '#dfe1e6') + (l.color === 'black' ? ';color:#fff' : '') + '">' + esc(l.name || '') + '</span>'; }).join('');
         var avs = (c.members || []).slice(0, 2).map(function (m) {
           var ini = (m.fullName || m.username || '?').split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2);
           return m.avatar ? '<span class="av" title="' + esc(m.fullName || '') + '" style="background-image:url(' + (/\.(png|jpe?g|gif)$/.test(m.avatar) ? m.avatar : m.avatar + '/50.png') + ')"></span>'
@@ -152,14 +195,17 @@
     Promise.all([
       t.cards('id', 'name', 'due', 'dueComplete', 'idList', 'labels', 'members'),
       t.lists('id', 'name'),
-      t.board('id'),
+      t.board('id', 'labels', 'members'),
+      t.member('id'),
       api.isAuthorized().then(function (ok) { return ok ? api.getToken() : null; }).catch(function () { return null; })
     ]).then(function (r) {
       var cards = r[0], lists = r[1], boardId = r[2].id, now = new Date();
-      token = r[3];
-      var listName = {}; lists.forEach(function (l) { listName[l.id] = l.name; });
+      board = r[2]; meId = r[3].id; listsAll = lists;
+      token = r[4];
+      var listName = {}; lists.forEach(function (l) { listName[l.id] = l.name; }); LISTNAME = listName;
       hits = cards.filter(function (c) { return c.due && !c.dueComplete && listName[c.idList] && listName[c.idList] !== 'Start Here' && inView(c.due, now); })
                   .sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
+      document.getElementById('newBtn').style.display = token ? '' : 'none';
       if (!token) { showAuthBanner(); render(listName, now); return; }
       render(listName, now);
       loadPoints(boardId).then(function (pts) {
@@ -176,6 +222,93 @@
     var row = e.target.closest('.card'); if (!row) return;
     if (e.target.closest('.tick')) { e.stopPropagation(); complete(row); return; }
     t.showCard(row.getAttribute('data-id'));
+  });
+
+  // ---------- New task ----------
+  var pick = { labels: {}, members: {} };
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+  function openForm() {
+    var f = document.getElementById('newForm');
+    var d = new Date();
+    if (view === 'nextday') d.setDate(d.getDate() + 1);
+    document.getElementById('nDate').value = ymd(d);
+    document.getElementById('nTime').value = view === 'nextday' ? '09:00' : '17:00';
+    // Lists: everything except Start Here; default To Dos.
+    var sel = document.getElementById('nList');
+    sel.innerHTML = listsAll.filter(function (l) { return l.name !== 'Start Here' && l.name !== 'OKRs'; })
+      .map(function (l) { return '<option value="' + l.id + '"' + (l.name === 'To Dos' ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join('');
+    // Labels: department labels first; status labels (OKR-only) left out.
+    var skip = { 'On track': 1, 'At risk': 1, 'Off track': 1 };
+    pick.labels = {};
+    document.getElementById('nLabels').innerHTML = (board.labels || []).filter(function (l) { return l.name && !skip[l.name]; })
+      .map(function (l) { return '<button type="button" class="chip" data-id="' + l.id + '" style="background:' + (COLORS[l.color] || '#dfe1e6') + (l.color === 'black' ? ';color:#fff' : '') + '">' + esc(l.name) + '</button>'; }).join('');
+    pick.members = {}; pick.members[meId] = 1;
+    document.getElementById('nMembers').innerHTML = (board.members || []).map(function (m) {
+      var on = m.id === meId ? ' on' : '';
+      var img = m.avatar ? '<span class="av" style="background-image:url(' + (/\.(png|jpe?g|gif)$/.test(m.avatar) ? m.avatar : m.avatar + '/50.png') + ')"></span>' : '<span class="av">' + esc((m.fullName || '?')[0]) + '</span>';
+      return '<button type="button" class="person' + on + '" data-id="' + m.id + '">' + img + esc((m.fullName || m.username || '').split(' ')[0]) + '</button>';
+    }).join('');
+    f.classList.add('open');
+    document.getElementById('newBtn').style.display = 'none';
+    document.getElementById('nName').focus();
+  }
+
+  function closeForm() {
+    var f = document.getElementById('newForm');
+    f.reset(); f.classList.remove('open');
+    document.getElementById('newBtn').style.display = token ? '' : 'none';
+  }
+
+  document.getElementById('newBtn').onclick = openForm;
+  document.getElementById('nCancel').onclick = closeForm;
+  document.getElementById('nLabels').addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    var id = b.getAttribute('data-id'); if (pick.labels[id]) delete pick.labels[id]; else pick.labels[id] = 1;
+    b.classList.toggle('on');
+  });
+  document.getElementById('nMembers').addEventListener('click', function (e) {
+    var b = e.target.closest('.person'); if (!b) return;
+    var id = b.getAttribute('data-id'); if (pick.members[id]) delete pick.members[id]; else pick.members[id] = 1;
+    b.classList.toggle('on');
+  });
+
+  document.getElementById('newForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('nName').value.trim(); if (!name) return;
+    var due = new Date(document.getElementById('nDate').value + 'T' + document.getElementById('nTime').value);
+    var body = new URLSearchParams({
+      name: name,
+      desc: document.getElementById('nDesc').value.trim(),
+      due: due.toISOString(),
+      idList: document.getElementById('nList').value,
+      idLabels: Object.keys(pick.labels).join(','),
+      idMembers: Object.keys(pick.members).join(','),
+      pos: 'bottom'
+    });
+    var btn = document.getElementById('nSave'); btn.disabled = true; btn.textContent = 'Creating…';
+    fetch('https://api.trello.com/1/cards?key=' + APP.appKey + '&token=' + token, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
+    }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (card) {
+        btn.disabled = false; btn.textContent = 'Create task'; closeForm();
+        var now = new Date();
+        if (inView(card.due, now)) {
+          card.labels = (board.labels || []).filter(function (l) { return card.idLabels.indexOf(l.id) > -1; });
+          card.members = (board.members || []).filter(function (m) { return card.idMembers.indexOf(m.id) > -1; });
+          hits.push(card); hits.sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
+          render(LISTNAME, now);
+        } else {
+          var n = document.createElement('p'); n.className = 'hint'; n.textContent = 'Created "' + card.name + '". It is due outside this view, so it is not listed here.';
+          document.getElementById('out').prepend(n);
+        }
+      })
+      .catch(function () {
+        btn.disabled = false; btn.textContent = 'Create task';
+        var n = document.createElement('p'); n.className = 'err'; n.textContent = 'Could not create the task. Check the fields and try again.';
+        document.getElementById('newForm').prepend(n);
+      });
   });
 
   load();
