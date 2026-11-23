@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Trailblazer Quick Views</title>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
+<body>
+<script>
+  // Adds Today / This week / Overdue buttons to the board header.
+  // Each opens the board in a new tab with Trello's built-in filter applied.
+  var base = window.location.href.replace(/[^/]*$/, '');
+  var icon = { dark: base + 'icon-light.svg', light: base + 'icon-dark.svg' };
+
+  function views(shortLink) {
+    var url = 'https://www.trello.com/b/' + shortLink + '?filter=';
+    return [
+      { text: 'Today',     filter: 'due:day',      target: 'tb-today' },
+      { text: 'This week', filter: 'due:week',     target: 'tb-week' },
+      { text: 'Overdue',   filter: 'overdue:true', target: 'tb-overdue' }
+    ].map(function (v) {
+      return { icon: icon, text: v.text, url: url + v.filter, target: v.target };
+    });
+  }
+
+  window.TrelloPowerUp.initialize({
+    'board-buttons': function (t) {
+      return t.board('shortLink').then(function (b) { return views(b.shortLink); });
+    }
+  });
+</script>
+</body>
+</html>
