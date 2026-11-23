@@ -76,7 +76,7 @@
   <div class="actions">
     <button class="btn" type="submit" id="nSave">Create task</button>
     <button class="btn ghost" type="button" id="nCancel">Cancel</button>
-    <span class="hint">Set hours on the card after (Power-ups → Story Points).</span>
+    <span class="hint">The card opens next so you can set its hours.</span>
   </div>
 </form>
 <div id="out"></div>
@@ -292,17 +292,8 @@
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString()
     }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (card) {
-        btn.disabled = false; btn.textContent = 'Create task'; closeForm();
-        var now = new Date();
-        if (inView(card.due, now)) {
-          card.labels = (board.labels || []).filter(function (l) { return card.idLabels.indexOf(l.id) > -1; });
-          card.members = (board.members || []).filter(function (m) { return card.idMembers.indexOf(m.id) > -1; });
-          hits.push(card); hits.sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
-          render(LISTNAME, now);
-        } else {
-          var n = document.createElement('p'); n.className = 'hint'; n.textContent = 'Created "' + card.name + '". It is due outside this view, so it is not listed here.';
-          document.getElementById('out').prepend(n);
-        }
+        // Open the new card right away so its hours can be set (Power-ups → Story Points).
+        t.showCard(card.id);
       })
       .catch(function () {
         btn.disabled = false; btn.textContent = 'Create task';
