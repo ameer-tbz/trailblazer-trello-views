@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://p.trellocdn.com/power-up.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 4px 16px 16px; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #172b4d; background: #fff; }
+  .sub { color: #626f86; font-size: 12px; margin: 0 0 12px; }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #626f86; margin: 16px 0 6px; }
+  .card { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid #dcdfe4; border-radius: 8px; margin-bottom: 6px; cursor: pointer; background: #fff; }
+  .card:hover { background: #f1f2f4; }
+  .name { flex: 1; min-width: 0; }
+  .labels { display: flex; gap: 4px; margin-bottom: 3px; flex-wrap: wrap; }
+  .lab { height: 6px; width: 32px; border-radius: 3px; }
+  .meta { color: #626f86; font-size: 12px; }
+  .due { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; background: #f5cd47; color: #172b4d; }
+  .due.over { background: #c9372c; color: #fff; }
+  .due.later { background: #e9f2ff; color: #0055cc; }
+  .av { width: 24px; height: 24px; border-radius: 50%; background: #dfe1e6 center/cover; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: 600; flex: none; }
+  .empty { color: #626f86; padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<p class="sub" id="sub"></p>
+<div id="out"></div>
+<script>
+  var t = window.TrelloPowerUp.iframe();
+  var view = t.arg('view') || 'today';
+  var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#8590a2' };
+  var DESC = {
+    today: 'Due today or overdue, not done.',
+    nextday: 'Due in the next 24 hours, not done.',
+    week: 'Due in the next 7 days, not done.',
+    overdue: 'Past due and not done.'
+  };
+
+  function inView(due, now) {
+    var d = new Date(due), end = new Date(now); end.setHours(23, 59, 59, 999);
+    if (view === 'today') return d <= end;
+    if (view === 'nextday') return d >= now && d - now <= 864e5;
+    if (view === 'week') return d >= now && d - now <= 7 * 864e5;
+    if (view === 'overdue') return d < now;
+  }
+
+  function fmt(d) {
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' +
+           d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function esc(s) { var e = document.createElement('div'); e.textContent = s; return e.innerHTML; }
+
+  Promise.all([t.cards('id', 'name', 'due', 'dueComplete', 'idList', 'labels', 'members'), t.lists('id', 'name')])
+  .then(function (r) {
+    var cards = r[0], lists = r[1], now = new Date();
+    var listName = {}; lists.forEach(function (l) { listName[l.id] = l.name; });
+    var hits = cards.filter(function (c) { return c.due && !c.dueComplete && listName[c.idList] && listName[c.idList] !== 'Start Here' && inView(c.due, now); })
+                    .sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
+    document.getElementById('sub').textContent = DESC[view] + ' ' + hits.length + (hits.length === 1 ? ' card.' : ' cards.') + ' Click a card to open it.';
+    if (!hits.length) { document.getElementById('out').innerHTML = '<div class="empty">Nothing here. Nice.</div>'; return; }
+    var groups = {}, order = [];
+    hits.forEach(function (c) { var n = listName[c.idList]; if (!groups[n]) { groups[n] = []; order.push(n); } groups[n].push(c); });
+    var html = '';
+    order.forEach(function (n) {
+      html += '<h3>' + esc(n) + ' (' + groups[n].length + ')</h3>';
+      groups[n].forEach(function (c) {
+        var d = new Date(c.due), cls = d < now ? 'over' : (d - now > 864e5 ? 'later' : '');
+        var labs = (c.labels || []).map(function (l) { return '<span class="lab" title="' + esc(l.name || '') + '" style="background:' + (COLORS[l.color] || '#dfe1e6') + '"></span>'; }).join('');
+        var avs = (c.members || []).slice(0, 2).map(function (m) {
+          var ini = (m.fullName || m.username || '?').split(' ').map(function (w) { return w[0]; }).join('').slice(0, 2);
+          return m.avatar ? '<span class="av" title="' + esc(m.fullName || '') + '" style="background-image:url(' + (/\.(png|jpe?g|gif)$/.test(m.avatar) ? m.avatar : m.avatar + '/50.png') + ')"></span>'
+                          : '<span class="av" title="' + esc(m.fullName || '') + '">' + esc(ini) + '</span>';
+        }).join('');
+        html += '<div class="card" data-id="' + c.id + '"><div class="name">' + (labs ? '<div class="labels">' + labs + '</div>' : '') +
+                esc(c.name) + '</div><span class="due ' + cls + '">' + (d < now ? 'Overdue · ' : '') + fmt(d) + '</span>' + avs + '</div>';
+      });
+    });
+    var out = document.getElementById('out'); out.innerHTML = html;
+    out.addEventListener('click', function (e) {
+      var el = e.target.closest('.card'); if (!el) return;
+      t.closeModal().then(function () { return t.showCard(el.getAttribute('data-id')); });
+    });
+  });
+</script>
+</body>
+</html>
