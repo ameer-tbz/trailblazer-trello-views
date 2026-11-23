@@ -16,9 +16,10 @@
   function views(shortLink) {
     var url = 'https://www.trello.com/b/' + shortLink + '?filter=';
     return [
-      { text: 'Today',     filter: 'due:day',      target: 'tb-today',   icon: 'today' },
-      { text: 'This week', filter: 'due:week',     target: 'tb-week',    icon: 'week' },
-      { text: 'Overdue',   filter: 'overdue:true', target: 'tb-overdue', icon: 'overdue' }
+      { text: 'Today',            filter: 'due:day,overdue:true', target: 'tb-today',   icon: 'today' },
+      { text: 'Due in next day',  filter: 'due:day',              target: 'tb-nextday', icon: 'nextday' },
+      { text: 'Due in next week', filter: 'due:week',             target: 'tb-week',    icon: 'week' },
+      { text: 'Overdue',          filter: 'overdue:true',         target: 'tb-overdue', icon: 'overdue' }
     ].map(function (v) {
       return { icon: icon(v.icon), text: v.text, url: url + v.filter, target: v.target };
     });
