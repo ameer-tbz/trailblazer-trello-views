@@ -18,14 +18,34 @@
   .due.over { background: #c9372c; color: #fff; }
   .due.later { background: #e9f2ff; color: #0055cc; }
   .av { width: 24px; height: 24px; border-radius: 50%; background: #dfe1e6 center/cover; font-size: 10px; display: flex; align-items: center; justify-content: center; font-weight: 600; flex: none; }
+  .tick { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #8590a2; background: #fff; flex: none; cursor: pointer; padding: 0; position: relative; }
+  .tick:hover { border-color: #1f845a; background: #dcfff1; }
+  .tick:hover::after, .card.done .tick::after { content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px; border: solid #1f845a; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .card.done { opacity: .45; transition: opacity .3s; }
+  .card.done .tick { border-color: #1f845a; background: #dcfff1; }
+  .card.done .name { text-decoration: line-through; }
+  .pts { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: #e9f2ff; color: #0055cc; white-space: nowrap; }
+  .auth { display: flex; align-items: center; gap: 12px; background: #e9f2ff; border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
+  .auth p { margin: 0; flex: 1; font-size: 13px; }
+  .auth button { background: #0c66e4; color: #fff; border: 0; border-radius: 4px; padding: 7px 14px; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .auth button:hover { background: #0055cc; }
+  .err { color: #c9372c; font-size: 12px; margin: 0 0 8px; }
   .empty { color: #626f86; padding: 24px 0; text-align: center; }
 </style>
 </head>
 <body>
+<div id="auth"></div>
 <p class="sub" id="sub"></p>
 <div id="out"></div>
 <script>
-  var t = window.TrelloPowerUp.iframe();
+  // The API key is a public identifier (Trello designs it to live in Power-Up code).
+  // It only works from the allowed origin, and every action uses each person's own token,
+  // which Trello stores privately for them. No secret is used or stored here.
+  var APP = { appKey: '1545bc8076b21ee949786f8854e27424', appName: 'Trailblazer Quick Views', appAuthor: 'Trailblazer Marketing' };
+  var AGILE_TOOLS = '59d4ef8cfea15a55b0086614';
+  var t = window.TrelloPowerUp.iframe(APP);
+  var api = t.getRestApi();
+  var token = null, hits = [];
   var view = t.arg('view') || 'today';
   var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#8590a2' };
   var DESC = {
@@ -50,14 +70,19 @@
 
   function esc(s) { var e = document.createElement('div'); e.textContent = s; return e.innerHTML; }
 
-  Promise.all([t.cards('id', 'name', 'due', 'dueComplete', 'idList', 'labels', 'members'), t.lists('id', 'name')])
-  .then(function (r) {
-    var cards = r[0], lists = r[1], now = new Date();
-    var listName = {}; lists.forEach(function (l) { listName[l.id] = l.name; });
-    var hits = cards.filter(function (c) { return c.due && !c.dueComplete && listName[c.idList] && listName[c.idList] !== 'Start Here' && inView(c.due, now); })
-                    .sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
-    document.getElementById('sub').textContent = DESC[view] + ' ' + hits.length + (hits.length === 1 ? ' card.' : ' cards.') + ' Click a card to open it.';
-    if (!hits.length) { document.getElementById('out').innerHTML = '<div class="empty">Nothing here. Nice.</div>'; return; }
+  function hours(n) { return (Math.round(n * 100) / 100) + ' h'; }
+
+  function updateSub() {
+    var open = hits.filter(function (c) { return !c.done; });
+    var total = open.reduce(function (s, c) { return s + (c.points || 0); }, 0);
+    var txt = DESC[view] + ' ' + open.length + (open.length === 1 ? ' card' : ' cards');
+    if (token) txt += ' · ' + hours(total);
+    document.getElementById('sub').textContent = txt + '. Click a card to open it.';
+  }
+
+  function render(listName, now) {
+    var out = document.getElementById('out');
+    if (!hits.length) { out.innerHTML = '<div class="empty">Nothing here. Nice.</div>'; updateSub(); return; }
     var groups = {}, order = [];
     hits.forEach(function (c) { var n = listName[c.idList]; if (!groups[n]) { groups[n] = []; order.push(n); } groups[n].push(c); });
     var html = '';
@@ -71,16 +96,89 @@
           return m.avatar ? '<span class="av" title="' + esc(m.fullName || '') + '" style="background-image:url(' + (/\.(png|jpe?g|gif)$/.test(m.avatar) ? m.avatar : m.avatar + '/50.png') + ')"></span>'
                           : '<span class="av" title="' + esc(m.fullName || '') + '">' + esc(ini) + '</span>';
         }).join('');
-        html += '<div class="card" data-id="' + c.id + '"><div class="name">' + (labs ? '<div class="labels">' + labs + '</div>' : '') +
-                esc(c.name) + '</div><span class="due ' + cls + '">' + (d < now ? 'Overdue · ' : '') + fmt(d) + '</span>' + avs + '</div>';
+        html += '<div class="card" data-id="' + c.id + '">' +
+                (token ? '<button class="tick" title="Mark complete" aria-label="Mark complete"></button>' : '') +
+                '<div class="name">' + (labs ? '<div class="labels">' + labs + '</div>' : '') + esc(c.name) + '</div>' +
+                (c.points != null ? '<span class="pts">' + hours(c.points) + '</span>' : '') +
+                '<span class="due ' + cls + '">' + (d < now ? 'Overdue · ' : '') + fmt(d) + '</span>' + avs + '</div>';
       });
     });
-    var out = document.getElementById('out'); out.innerHTML = html;
-    out.addEventListener('click', function (e) {
-      var el = e.target.closest('.card'); if (!el) return;
-      t.showCard(el.getAttribute('data-id'));
+    out.innerHTML = html;
+    updateSub();
+  }
+
+  function complete(row) {
+    var id = row.getAttribute('data-id');
+    var c = hits.filter(function (x) { return x.id === id; })[0];
+    if (!c || c.done) return;
+    c.done = true; row.classList.add('done'); updateSub();
+    fetch('https://api.trello.com/1/cards/' + id + '?key=' + APP.appKey + '&token=' + token, {
+      method: 'PUT', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'dueComplete=true'
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+    }).catch(function () {
+      c.done = false; row.classList.remove('done'); updateSub();
+      var e = document.createElement('p'); e.className = 'err'; e.textContent = 'Could not mark "' + c.name + '" complete. Try again, or tick it on the card.';
+      document.getElementById('out').prepend(e);
     });
+  }
+
+  function showAuthBanner() {
+    document.getElementById('auth').innerHTML =
+      '<div class="auth"><p>One-time step: allow Quick Views to tick off tasks and show hours for you.</p><button id="authBtn">Authorize</button></div>';
+    document.getElementById('authBtn').onclick = function () {
+      api.authorize({ scope: 'read,write', expiration: 'never' })
+        .then(function () { document.getElementById('auth').innerHTML = ''; load(); })
+        .catch(function () {});
+    };
+  }
+
+  function loadPoints(boardId) {
+    return fetch('https://api.trello.com/1/boards/' + boardId + '/cards?fields=id&pluginData=true&key=' + APP.appKey + '&token=' + token)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (cards) {
+        var pts = {};
+        cards.forEach(function (c) {
+          (c.pluginData || []).forEach(function (p) {
+            if (p.idPlugin !== AGILE_TOOLS) return;
+            try { var v = JSON.parse(p.value).points; if (v != null && v !== '') pts[c.id] = Number(v); } catch (e) {}
+          });
+        });
+        return pts;
+      });
+  }
+
+  function load() {
+    Promise.all([
+      t.cards('id', 'name', 'due', 'dueComplete', 'idList', 'labels', 'members'),
+      t.lists('id', 'name'),
+      t.board('id'),
+      api.isAuthorized().then(function (ok) { return ok ? api.getToken() : null; }).catch(function () { return null; })
+    ]).then(function (r) {
+      var cards = r[0], lists = r[1], boardId = r[2].id, now = new Date();
+      token = r[3];
+      var listName = {}; lists.forEach(function (l) { listName[l.id] = l.name; });
+      hits = cards.filter(function (c) { return c.due && !c.dueComplete && listName[c.idList] && listName[c.idList] !== 'Start Here' && inView(c.due, now); })
+                  .sort(function (a, b) { return new Date(a.due) - new Date(b.due); });
+      if (!token) { showAuthBanner(); render(listName, now); return; }
+      render(listName, now);
+      loadPoints(boardId).then(function (pts) {
+        hits.forEach(function (c) { if (pts[c.id] != null) c.points = pts[c.id]; });
+        render(listName, now);
+      }).catch(function () {
+        // Token revoked or expired: ask again.
+        token = null; showAuthBanner(); render(listName, now);
+      });
+    });
+  }
+
+  document.getElementById('out').addEventListener('click', function (e) {
+    var row = e.target.closest('.card'); if (!row) return;
+    if (e.target.closest('.tick')) { e.stopPropagation(); complete(row); return; }
+    t.showCard(row.getAttribute('data-id'));
   });
+
+  load();
 </script>
 </body>
 </html>
