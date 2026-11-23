@@ -293,7 +293,8 @@
     }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (card) {
         // Open the new card right away so its hours can be set (Power-ups → Story Points).
-        t.showCard(card.id);
+        // Navigating to the card's link opens it even if Trello hasn't loaded the new card yet.
+        t.navigate({ url: card.shortUrl || card.url });
       })
       .catch(function () {
         btn.disabled = false; btn.textContent = 'Create task';
