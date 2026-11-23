@@ -78,7 +78,7 @@
     var out = document.getElementById('out'); out.innerHTML = html;
     out.addEventListener('click', function (e) {
       var el = e.target.closest('.card'); if (!el) return;
-      t.closeModal().then(function () { return t.showCard(el.getAttribute('data-id')); });
+      t.showCard(el.getAttribute('data-id'));
     });
   });
 </script>
