@@ -15,7 +15,6 @@
 
   var VIEWS = [
     { text: 'Today',            view: 'today',   icon: 'today' },
-    { text: 'Next 24h',         title: 'Due in the next 24 hours', view: 'nextday', icon: 'nextday' },
     { text: 'This week',        title: 'Due in the next 7 days', view: 'week',    icon: 'week' },
     { text: 'Overdue',          view: 'overdue', icon: 'overdue' },
     { text: 'Yesterday',        title: 'Done yesterday', view: 'yesterday', icon: 'done' }
@@ -31,7 +30,7 @@
           text: v.text,
           callback: function (t) {
             // Opens a pop-up inside Trello, so it works in the desktop app and the browser.
-            return t.modal({ url: './view.html?v=14', args: { view: v.view }, title: v.title || v.text, height: 640 });
+            return t.modal({ url: './view.html?v=15', args: { view: v.view }, title: v.title || v.text, height: 640 });
           }
         };
       });
