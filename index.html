@@ -14,10 +14,11 @@
   function icon(name) { return { dark: base + name + '-light.svg', light: base + name + '-dark.svg' }; }
 
   var VIEWS = [
-    { text: 'Today',            view: 'today',   icon: 'today' },
-    { text: 'This week',        title: 'Due in the next 7 days', view: 'week',    icon: 'week' },
-    { text: 'Overdue',          view: 'overdue', icon: 'overdue' },
-    { text: 'Yesterday',        title: 'Done yesterday', view: 'yesterday', icon: 'done' }
+    { text: 'Today',     view: 'today',     icon: 'today' },
+    { text: 'Tomorrow',  view: 'nextday',   icon: 'nextday', title: 'Due tomorrow' },
+    { text: 'This week', view: 'week',      icon: 'week',    title: 'Due in the next 7 days' },
+    { text: 'Overdue',   view: 'overdue',   icon: 'overdue' },
+    { text: '',          view: 'yesterday', icon: 'done',    title: 'Done yesterday' }
   ];
 
   var APP = { appKey: '1545bc8076b21ee949786f8854e27424', appName: 'Trailblazer Quick Views', appAuthor: 'Trailblazer Marketing' };

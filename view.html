@@ -105,7 +105,7 @@
   var COLORS = { green:'#4bce97', yellow:'#f5cd47', orange:'#fea362', red:'#f87168', purple:'#9f8fef', blue:'#579dff', sky:'#6cc3e0', lime:'#94c748', pink:'#e774bb', black:'#626f86' };
   var DESC = {
     today: 'Due today or overdue, not done.',
-    nextday: 'Due in the next 24 hours, not done.',
+    nextday: 'Due tomorrow, not done.',
     week: 'Due in the next 7 days, not done.',
     overdue: 'Past due and not done.',
     yesterday: 'Ticked off yesterday.'
@@ -114,7 +114,7 @@
   function inView(due, now) {
     var d = new Date(due), end = new Date(now); end.setHours(23, 59, 59, 999);
     if (view === 'today') return d <= end;
-    if (view === 'nextday') return d >= now && d - now <= 864e5;
+    if (view === 'nextday') { var s1 = new Date(now); s1.setHours(0, 0, 0, 0); s1.setDate(s1.getDate() + 1); var e1 = new Date(s1); e1.setDate(e1.getDate() + 1); return d >= s1 && d < e1; }
     if (view === 'week') return d >= now && d - now <= 7 * 864e5;
     if (view === 'overdue') return d < now;
   }
