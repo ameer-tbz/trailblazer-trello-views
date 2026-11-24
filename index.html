@@ -15,10 +15,10 @@
 
   var VIEWS = [
     { text: 'Today',            view: 'today',   icon: 'today' },
-    { text: 'Due in next day',  view: 'nextday', icon: 'nextday' },
-    { text: 'Due in next week', view: 'week',    icon: 'week' },
+    { text: 'Next 24h',         title: 'Due in the next 24 hours', view: 'nextday', icon: 'nextday' },
+    { text: 'This week',        title: 'Due in the next 7 days', view: 'week',    icon: 'week' },
     { text: 'Overdue',          view: 'overdue', icon: 'overdue' },
-    { text: 'Done yesterday',   view: 'yesterday', icon: 'done' }
+    { text: 'Yesterday',        title: 'Done yesterday', view: 'yesterday', icon: 'done' }
   ];
 
   var APP = { appKey: '1545bc8076b21ee949786f8854e27424', appName: 'Trailblazer Quick Views', appAuthor: 'Trailblazer Marketing' };
@@ -31,7 +31,7 @@
           text: v.text,
           callback: function (t) {
             // Opens a pop-up inside Trello, so it works in the desktop app and the browser.
-            return t.modal({ url: './view.html?v=12', args: { view: v.view }, title: v.text, height: 640 });
+            return t.modal({ url: './view.html?v=14', args: { view: v.view }, title: v.title || v.text, height: 640 });
           }
         };
       });
